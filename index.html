@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>مواقيت الصلاة - مسقط</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html,body{margin:0;height:100%;background:#0b1026;color:#fff;font-family:Tahoma,Arial,sans-serif;overflow:hidden}
+#wrap{position:absolute;left:3%;right:3%;top:4%;bottom:4%}
+.card{background:#141c42;border:2px solid #2c3a7a;border-radius:18px}
+#top{height:42%;position:relative}
+#next{position:absolute;right:0;top:0;width:46%;height:100%;box-sizing:border-box;padding:2.2% 3%}
+#next .lbl{font-size:20px;color:#9fb0ff}
+#next .nm{font-size:56px;font-weight:bold;margin-top:6px}
+#next .tm{font-size:28px;color:#c9d3ff}
+#next .rem{font-size:26px;color:#8fb4ff;margin-top:14px}
+#clock{position:absolute;left:0;top:0;width:50%;text-align:left;direction:ltr}
+#clock .big{font-size:110px;font-weight:bold;line-height:1.1}
+#clock .ap{font-size:34px;color:#9fb0ff}
+#dates{direction:rtl;text-align:left;font-size:22px;color:#c9d3ff;margin-top:6px;line-height:1.7}
+#row{margin-top:2.5%;height:26%;display:flex;padding:1.2%;box-sizing:border-box}
+.p{flex:1;margin:0 6px;border-radius:14px;text-align:center;display:flex;flex-direction:column;justify-content:center;border:2px solid transparent}
+.p .n{font-size:24px;color:#9fb0ff}
+.p .t{font-size:38px;font-weight:bold;margin-top:8px}
+.p.on{background:#26357f;border-color:#8fa3ff}
+.p.done{opacity:.45}
+#foot{margin-top:2.5%;text-align:center;font-size:20px;color:#6f7fb8}
+#foot .msg{font-size:26px;color:#c9d3ff;margin-top:6px}
+#bism{text-align:center;font-size:38px;font-weight:bold;color:#e6ebff;margin-bottom:2%}
+#alert{display:none;position:fixed;left:0;right:0;bottom:0;padding:14px 10px;text-align:center;font-size:36px;font-weight:bold;background:#f5a623;color:#1a1200;z-index:9;animation:pulse 1.2s infinite}
+@keyframes pulse{0%{opacity:1}50%{opacity:.55}100%{opacity:1}}
+#lock{display:none;position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(5,8,20,.94);z-index:20;align-items:center;justify-content:center}
+#lock .box{background:#141c42;border:2px solid #8fa3ff;border-radius:18px;padding:36px 60px;text-align:center}
+#lock .t{font-size:34px;font-weight:bold}
+#lock .dots{font-size:60px;letter-spacing:14px;margin:18px 0;direction:ltr;color:#8fb4ff}
+#lock .m{font-size:22px;color:#c9d3ff;min-height:30px}
+#lockbadge{position:fixed;left:10px;top:8px;font-size:18px;color:#3d4a86;z-index:5}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-14px)}75%{transform:translateX(14px)}}
+</style>
+</head>
+<body>
+<div id="alert"></div>
+<div id="lockbadge">&#128274;</div>
+<div id="lock"><div class="box" id="lbox"><div class="t">الشاشة مقفلة</div><div class="dots" id="dots"></div><div class="m" id="lmsg">أدخل الرمز للخروج</div></div></div>
+<div id="wrap">
+  <div id="bism">بسم الله الرحمن الرحيم</div>
+  <div id="top">
+    <div id="clock"><span class="big" id="hm"></span> <span class="ap" id="ap"></span>
+      <div id="dates"><div id="greg"></div><div id="hij"></div></div></div>
+    <div id="next" class="card">
+      <div class="lbl">الصلاة القادمة</div>
+      <div class="nm" id="nn"></div>
+      <div class="tm" id="nt"></div>
+      <div class="rem" id="nr"></div>
+    </div>
+  </div>
+  <div id="row" class="card"></div>
+  <div id="foot">مسقط، سلطنة عُمان<div class="msg">هشام و آدم لا تنسوا الصلاة</div></div>
+</div>
+<script>
+// ===== Settings (edit here) =====
+var LAT = 23.5880, LNG = 58.3829, TZ = 4;
+var FAJR_ANGLE = 18, ISHA_ANGLE = 18;
+var ASR_FACTOR = 1;                       // 1 = Shafi/Maliki/Hanbali, 2 = Hanafi
+var ADJ = {fajr:0, dhuhr:6, asr:5, maghrib:6, isha:0}; // minutes, to match the Oman Awqaf timetable
+var HIJRI_ADJ = 1;
+var ALERT_MIN = 15;                       // alert starts this many minutes before each Azan
+if(location.search.indexOf("test")>-1) ALERT_MIN = 1000;   // add ?test to the link to preview the alert                        // days (+1 / -1) if the Hijri date is off
+// =================================
+
+var NAMES = [["fajr","الفجر"],["dhuhr","الظهر"],["asr","العصر"],["maghrib","المغرب"],["isha","العشاء"]];
+var MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+var DAYS = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+var HM = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
+var R = Math.PI/180;
+function sin(d){return Math.sin(d*R)} function cos(d){return Math.cos(d*R)} function tan(d){return Math.tan(d*R)}
+function asin(x){return Math.asin(x)/R} function acos(x){return Math.acos(x)/R}
+function atan2(y,x){return Math.atan2(y,x)/R} function acot(x){return Math.atan(1/x)/R}
+function fixA(a){a=a-360*Math.floor(a/360);return a} function fixH(a){a=a-24*Math.floor(a/24);return a}
+function jdn(y,m,d){var a=Math.floor((14-m)/12),yy=y+4800-a,mm=m+12*a-3;
+  return d+Math.floor((153*mm+2)/5)+365*yy+Math.floor(yy/4)-Math.floor(yy/100)+Math.floor(yy/400)-32045}
+function sunPos(jd){var D=jd-2451545.0,g=fixA(357.529+0.98560028*D),q=fixA(280.459+0.98564736*D),
+  L=fixA(q+1.915*sin(g)+0.020*sin(2*g)),e=23.439-0.00000036*D,RA=atan2(cos(e)*sin(L),cos(L))/15;
+  return {decl:asin(sin(e)*sin(L)),eq:q/15-fixH(RA)}}
+function prayerTimes(y,m,d){
+  var jd=jdn(y,m,d)-0.5-LNG/360;
+  function mid(t){return fixH(12-sunPos(jd+t).eq)}
+  function ang(a,t,ccw){var dc=sunPos(jd+t).decl,n=mid(t);
+    var v=acos((-sin(a)-sin(dc)*sin(LAT))/(cos(dc)*cos(LAT)))/15;return n+(ccw?-v:v)}
+  function asr(f,t){var dc=sunPos(jd+t).decl;return ang(-acot(f+tan(Math.abs(LAT-dc))),t)}
+  var z=TZ-LNG/15, o={};
+  o.fajr=ang(FAJR_ANGLE,5/24,true)+z;
+  o.dhuhr=mid(12/24)+z;
+  o.asr=asr(ASR_FACTOR,13/24)+z;
+  o.maghrib=ang(0.833,18/24)+z;
+  o.isha=ang(ISHA_ANGLE,18/24)+z;
+  for(var k in ADJ)o[k]+=ADJ[k]/60;
+  return o}
+function hijri(y,m,d){var jd=jdn(y,m,d)+HIJRI_ADJ,l=jd-1948440+10632,n=Math.floor((l-1)/10631);
+  l=l-10631*n+354;var j=Math.floor((10985-l)/5316)*Math.floor(50*l/17719)+Math.floor(l/5670)*Math.floor(43*l/15238);
+  l=l-Math.floor((30-j)/15)*Math.floor(17719*j/50)-Math.floor(j/16)*Math.floor(15238*j/43)+29;
+  var mo=Math.floor(24*l/709),dd=l-Math.floor(709*mo/24);return {y:30*n+j-30,m:mo,d:dd}}
+function ar(s){return String(s).replace(/[0-9]/g,function(c){return "٠١٢٣٤٥٦٧٨٩".charAt(c)})}
+function p2(n){return n<10?"0"+n:""+n}
+function fmt(h){var mins=Math.round(h*60)%1440,hh=Math.floor(mins/60),mm=mins%60,ap=hh>=12?"م":"ص";
+  hh=hh%12;if(hh===0)hh=12;return ar(hh+":"+p2(mm))+" "+ap}
+
+var row=document.getElementById("row"), lastKey="";
+function beep(){try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  var c=new C(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);
+  o.frequency.value=880;g.gain.value=0.2;o.start();setTimeout(function(){o.stop()},700)}catch(e){}}
+function render(){
+  var now=new Date(Date.now()+TZ*3600000); // Muscat wall clock via UTC getters
+  var y=now.getUTCFullYear(),m=now.getUTCMonth()+1,d=now.getUTCDate();
+  var h=now.getUTCHours()+now.getUTCMinutes()/60+now.getUTCSeconds()/3600;
+  var t=prayerTimes(y,m,d), idx=-1, i;
+  for(i=0;i<5;i++){if(h<t[NAMES[i][0]]){idx=i;break}}
+  var remH, nm, tm;
+  if(idx<0){var tom=new Date(now.getTime()+86400000);
+    var t2=prayerTimes(tom.getUTCFullYear(),tom.getUTCMonth()+1,tom.getUTCDate());
+    remH=24-h+t2.fajr;nm=NAMES[0][1];tm=fmt(t2.fajr);}
+  else{remH=t[NAMES[idx][0]]-h;nm=NAMES[idx][1];tm=fmt(t[NAMES[idx][0]]);}
+  var rm=Math.floor(remH*60),rh=Math.floor(rm/60),rmin=rm%60;
+  document.getElementById("nn").innerHTML=nm;
+  document.getElementById("nt").innerHTML=tm;
+  document.getElementById("nr").innerHTML="باقي "+(rh>0?ar(rh)+" ساعات و":"")+ar(rmin)+" دقيقة";
+  var al=document.getElementById("alert"),ft=document.getElementById("foot");
+  if(remH*60<=ALERT_MIN){
+    al.style.display="block";ft.style.visibility="hidden";
+    al.innerHTML="تنبيه: باقي "+ar(Math.max(1,Math.ceil(remH*60)))+" دقيقة على أذان "+nm;
+    var key=nm+d;if(key!==lastKey){lastKey=key;beep();}
+  }else{al.style.display="none";ft.style.visibility="visible";}
+  var hr=now.getUTCHours(),ap=hr>=12?"م":"ص";hr=hr%12;if(hr===0)hr=12;
+  document.getElementById("hm").innerHTML=ar(hr+":"+p2(now.getUTCMinutes()));
+  document.getElementById("ap").innerHTML=ap;
+  document.getElementById("greg").innerHTML=DAYS[now.getUTCDay()]+"، "+ar(d)+" "+MONTHS[m-1]+" "+ar(y);
+  var hj=hijri(y,m,d);
+  document.getElementById("hij").innerHTML=ar(hj.d)+" "+HM[hj.m-1]+" "+ar(hj.y)+" هـ";
+  var html="";
+  for(i=0;i<5;i++){var cls="p"+(i===idx||(idx<0&&i===0)?" on":(i<idx||idx<0?" done":""));
+    html+='<div class="'+cls+'"><div class="n">'+NAMES[i][1]+'</div><div class="t">'+fmt(t[NAMES[i][0]])+'</div></div>';}
+  row.innerHTML=html;
+  // slow drift to prevent screen burn-in
+  var w=document.getElementById("wrap"),s=now.getUTCMinutes()%6;
+  w.style.marginLeft=(s-3)+"px";w.style.marginTop=(s-3)+"px";
+}
+// ===== Lock =====
+var PASS="0985", locked=true, entered="", lockTimer=null, closeTimer=null;
+var lockEl=document.getElementById("lock"), dotsEl=document.getElementById("dots"), msgEl=document.getElementById("lmsg"), badge=document.getElementById("lockbadge");
+function drawDots(){var o="";for(var i=0;i<4;i++)o+=(i<entered.length?"\u25CF":"\u25CB")+" ";dotsEl.innerHTML=o}
+function showPrompt(){entered="";drawDots();msgEl.innerHTML="أدخل الرمز للخروج";lockEl.style.display="flex";
+  clearTimeout(closeTimer);closeTimer=setTimeout(hidePrompt,15000)}
+function hidePrompt(){lockEl.style.display="none";entered=""}
+function relock(){locked=true;badge.style.display="block";hidePrompt()}
+function trap(){try{history.pushState(null,"",location.href)}catch(e){}}
+trap();
+window.onpopstate=function(){if(locked)trap()};
+window.onbeforeunload=function(){if(locked)return "الشاشة مقفلة"};
+document.oncontextmenu=function(){return locked?false:true};
+document.onkeydown=function(e){
+  if(!locked)return;
+  var k=e.which||e.keyCode;
+  if(e.preventDefault)e.preventDefault();
+  if(lockEl.style.display!=="flex"){showPrompt();return}
+  clearTimeout(closeTimer);closeTimer=setTimeout(hidePrompt,15000);
+  var dgt=-1;if(k>=48&&k<=57)dgt=k-48;else if(k>=96&&k<=105)dgt=k-96;
+  if(dgt>=0){entered+=dgt;drawDots();
+    if(entered.length===4){
+      if(entered===PASS){locked=false;badge.style.display="none";hidePrompt();
+        clearTimeout(lockTimer);lockTimer=setTimeout(relock,60000); // re-locks itself after 60 s
+      }else{msgEl.innerHTML="الرمز خاطئ";var b=document.getElementById("lbox");
+        b.style.animation="none";void b.offsetWidth;b.style.animation="shake .4s";
+        entered="";setTimeout(drawDots,400)}}
+  }else if(k===8){entered=entered.slice(0,-1);drawDots()}
+  else if(k===27||k===461||k===10009){hidePrompt()}
+};
+render();setInterval(render,1000);
+</script>
+</body>
+</html>
